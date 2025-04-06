@@ -7,14 +7,14 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-from utils.image_utils import load_images_from_folder, detect_object_region, resize_to_match_height
-from utils.visualization import visualize_matching, save_panorama_result
-from panorama.strip_matching import find_best_match_with_parameters, evaluate_pair_quality
+from src.utils.image_utils import load_images_from_folder, get_bounding_box, resize_to_match_height
+from src.utils.visualization import visualize_matching, save_panorama_result
+from src.panorama.strip_matching import find_best_match_with_parameters, evaluate_pair_quality
 
-
-def create_panorama_from_images(images, param_combinations, adjacent_strip_width=30, blend_width=5):
+# internal function to create a panorama , which is called by the wrapper function.
+def create_panorama_internal(images, param_combinations, adjacent_strip_width=30, blend_width=5):
     """
-    Create a panorama from a list of images using flexible parameter matching.
+    create a panorama from a list of images using FLEXISBLE parameter matching.
     
     Args:
         images: List of input images
@@ -35,7 +35,7 @@ def create_panorama_from_images(images, param_combinations, adjacent_strip_width
     resized_images = [resize_to_match_height(img, common_height) for img in images]
     
     # get the center strip from the first image
-    bbox = detect_object_region(resized_images[0])
+    bbox = get_bounding_box(resized_images[0])
     x_min, y_min, x_max, y_max = bbox
     
     center_x = (x_min + x_max) // 2
@@ -161,7 +161,9 @@ def create_panorama_from_images(images, param_combinations, adjacent_strip_width
             import traceback
             traceback.print_exc()
     
-    # crop to content
+    # [Cropping]
+    # due to padding, alignment shifts (or resizing during blending)
+    # we may have empty rows/columns in the panorama, which need to be cropped.
     try:
         gray = cv2.cvtColor(panorama, cv2.COLOR_RGB2GRAY)
         _, binary = cv2.threshold(gray, 10, 255, cv2.THRESH_BINARY)
@@ -191,7 +193,7 @@ def create_panorama_from_images(images, param_combinations, adjacent_strip_width
     print("Panorama creation complete!")
     return panorama, parameters_used
 
-
+# wrapper function.
 def create_panorama(segmented_dir, output_dir, param_combinations, adjacent_strip_width=45, blend_width=5):
     """
     Create a panorama from segmented images in a directory.
@@ -227,7 +229,7 @@ def create_panorama(segmented_dir, output_dir, param_combinations, adjacent_stri
         print(f"Pair {q['pair']}: SSD={q['ssd']:.6f}, Y-offset={q['y_offset']}")
     
     # Create the panorama
-    panorama, parameters_used = create_panorama_from_images(
+    panorama, parameters_used = create_panorama_internal(
         images,
         param_combinations,
         adjacent_strip_width,
