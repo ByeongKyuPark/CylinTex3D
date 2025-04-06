@@ -13,6 +13,21 @@
   </table>
 </div>
 
+<br/>
+
+<div align="center">
+  <table>
+    <tr>
+      <td align="center"><b>Textured 3D Model (View 1)</b></td>
+      <td align="center"><b>Textured 3D Model (View 2)</b></td>
+    </tr>
+    <tr>
+      <td><img src="results/3d_model/sample.jpg" width="400" alt="3D Model View 1"/></td>
+      <td><img src="results/3d_model/sample2.jpg" width="400" alt="3D Model View 2"/></td>
+    </tr>
+  </table>
+</div>
+
 ## Overview
 
 This tool creates seamless panoramas from images of cylindrical objects by automatically stitching together photos taken while rotating around the object. Unlike traditional panorama tools, this project is specifically designed for cylindrical objects where distortion presents a unique challenge.
@@ -25,6 +40,9 @@ The tool uses a flexible parameter approach that adapts to the specific characte
 - **Flexible Parameter Matching**: Tests multiple parameters for each stitch and selects the best combination
 - **Vertical Offset Support**: Accounts for slight camera height variations between shots
 - **Intelligent Blending**: Seamlessly combines strips to create a continuous panorama
+- **Visual Hull 3D Modeling**: Reconstructs a solid mesh using silhouette fusion
+- **Cylindrical Texture Mapping**: Applies panorama texture to the 3D model
+- **Optional Plane Removal**: Removes flat caps like top/bottom faces for cleaner models
 - **Detailed Visualizations**: Generates step-by-step visualizations of the stitching process
 
 ## Requirements
@@ -34,113 +52,89 @@ The tool uses a flexible parameter approach that adapts to the specific characte
 - NumPy
 - Matplotlib
 - tqdm
+- trimesh
+- scikit-image
 
 To install the required dependencies:
 
 ```bash
-# Most reliable method (works on all systems)
 python -m pip install -r requirements.txt
-
-# Alternative methods if you encounter issues:
-# Install packages individually
-python -m pip install numpy
-python -m pip install opencv-python
-python -m pip install matplotlib
-python -m pip install tqdm
-
-# If using Anaconda
-# conda install numpy opencv matplotlib tqdm
 ```
 
-## Usage
+## CLI Examples
 
-### Basic Usage
-
+### 1. Image Segmentation
 ```bash
-python main.py --input_dir images
+python main.py --input_dir data/images --output_dir results --remove_planes
 ```
 
-This will:
-1. Segment objects from all images in the `images` directory
-2. Create a panorama using optimal parameters for each stitch
-3. Save the result to the `results` directory
-
-### Custom Options
-
+### 2. Panorama Creation, skip segmentation
 ```bash
-python main.py --input_dir images --output_dir my_results --match_widths 20,30,40 --y_offset_range -8,8
+python main.py --skip_segmentation --input_dir data/images --output_dir results
 ```
 
-Run with `--help` to see all available options:
-
+### 3. Skip segmentation & panorama
 ```bash
-python main.py --help
+python main.py --skip_segmentation --skip_panorama --input_dir data/images --output_dir results --remove_planes
 ```
 
-### Skip Segmentation
-
-If you already have segmented images:
-
+### 4. Plane Removal Only
 ```bash
-python main.py --input_dir images --skip_segmentation
+# python src/modeling/plane_remover.py --input results/3d_model/visual_hull.obj --output results/3d_model/cleaned_hull.obj --threshold 0.95
 ```
 
-## How It Works
+### 5. Apply Texture Mapping
+```bash
+python texture_model.py --model_path results/3d_model/visual_hull.obj \
+                        --panorama_path results/panorama.png \
+                        --output_dir results/3d_model \
+                        --remove_planes --plane_threshold 0.7
+```
 
-### 1. Object Segmentation
+### All-in-One Pipeline
+```bash
+python main.py --input_dir data/images --output_dir results --remove_planes --plane_threshold 0.9
+```
 
-The tool first separates the object from the background using the GrabCut algorithm. This creates clean silhouettes that improve the matching process.
-
-### 2. Strip Matching
-
-For each pair of adjacent images, the algorithm:
-
-1. Tests multiple combinations of strip widths and search regions
-2. Tries different vertical offsets to account for camera alignment variations
-3. Calculates the Sum of Squared Differences (SSD) for each combination
-4. Selects the parameters that produce the lowest SSD (best match)
-
-### 3. Panorama Creation
-
-The panorama is built incrementally:
-
-1. Starts with a center strip from the first image
-2. For each subsequent image, finds the best matching position and extracts a strip
-3. Adds each new strip to the left side of the current panorama
-4. Applies alpha blending to smooth transitions between strips
+### Re-apply Texture Only
+```bash
+python texture_model.py --model_path results/3d_model/visual_hull.obj \
+                        --panorama_path results/panorama.png \
+                        --output_dir results/3d_model \
+                        --texture_v_scale 1.0 --texture_v_offset 0.0
+```
 
 ## Project Structure
 
 ```
 cylindrical-panorama/
-├── README.md              # Project documentation
-├── requirements.txt       # Dependencies
-├── main.py                # Main execution script
-├── utils/
-│   ├── image_utils.py     # Image loading and basic operations
-│   └── visualization.py   # Visualization functions
-├── segmentation/
-│   └── grabcut.py         # Object segmentation code
-└── panorama/
-    ├── strip_matching.py  # Strip matching algorithms
-    └── stitching.py       # Panorama creation
+├── README.md                    # Project documentation
+├── requirements.txt             # Dependencies
+├── main.py                      # Main pipeline script
+├── texture_model.py             # Re-texture standalone script
+├── data/                        # Input images, segmented, panorama, models
+├── results/                     # Output results
+├── src/
+│   ├── segmentation/            # GrabCut
+│   ├── panorama/                # Stitching, strip matching
+│   ├── modeling/                # Visual hull, plane remover
+│   └── texturing/               # UV generation and OBJ export
+└── docs/                        # Sample input and output screenshots
 ```
 
-## Example Results
+## Output Files
 
-The tool generates several outputs:
-
-- `panorama.png`: The final panorama
-- `panorama_white.png`: The panorama with a white background
-- `matching_*.png`: Visualization of each matching step
-- `parameters_log.txt`: Log of parameters used for each image
+- `results/segmented/`: Segmented input images
+- `results/panorama.png`: Final stitched panorama
+- `results/3d_model/visual_hull.obj`: Raw 3D mesh from silhouettes
+- `results/3d_model/textured_model/`: Final model + texture
+- `results/3d_model/sample.jpg`: Screenshot of 3D result
 
 ## Limitations
 
-- Images must be taken in a consistent order (clockwise or counterclockwise)
-- The algorithm assumes the object is centered in each image
-- Better results are achieved with overlapping photos (20-30% overlap recommended)
-- Very reflective or transparent objects may produce inconsistent results
+- Images must be captured in order around the object (CW or CCW)
+- The object should remain centered and static between shots
+- Transparent or highly reflective objects may produce inconsistent results
 
 ## License
 
@@ -148,5 +142,5 @@ The tool generates several outputs:
 
 ## Acknowledgments
 
-- Algorithm based on strip-matching techniques for cylindrical objects
-- Inspired by panorama stitching approaches that adapt to non-planar surfaces
+- Panorama stitching approach inspired by cylindrical strip-matching techniques
+- Visual hull technique based on voxel carving using silhouettes

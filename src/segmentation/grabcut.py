@@ -1,14 +1,13 @@
 """
-Object segmentation using GrabCut algorithm.
+Object segmentation using "GrabCut" algorithm.
 This module handles the extraction of objects from background.
 """
 
 import os
 import cv2
 import numpy as np
-from utils.image_utils import load_images_from_folder, ensure_dir_exists
-from utils.visualization import visualize_segmentation
-
+from src.utils.image_utils import load_images_from_folder, create_directory
+from src.utils.visualization import visualize_segmentation
 
 def segment_object_grabcut(image):
     """
@@ -21,13 +20,14 @@ def segment_object_grabcut(image):
     Returns:
         Tuple of (segmented image, mask)
     """
-    # mask with same W,H as image, but 'single' channel
+    # mask with same (W,H) as image, but 'grayscale'
     mask = np.zeros(image.shape[:2], np.uint8)
     
     height, width = image.shape[:2]
     margin_x = width // 4
     margin_y = height // 4
-    # assuming object is roughly in the center  
+
+    # assuming object is roughly at the center  
     rect = (margin_x, margin_y, width - 2*margin_x, height - 2*margin_y)
     
     # 13 is fixed by OpenCV according to the documentation
@@ -47,7 +47,6 @@ def segment_object_grabcut(image):
     
     return segmented, mask_returned
 
-
 def refine_mask_with_morphology(mask, kernel_size=5):
     """
     Refine the mask using morphological operations.
@@ -66,7 +65,6 @@ def refine_mask_with_morphology(mask, kernel_size=5):
     refined_mask = cv2.morphologyEx(refined_mask, cv2.MORPH_OPEN, kernel)
     return refined_mask
 
-
 def ensure_content_visible(segmented_image, min_brightness=30):
     """
     Brighten the image if it's too dark.
@@ -83,27 +81,32 @@ def ensure_content_visible(segmented_image, min_brightness=30):
     l_channel, a, b = cv2.split(lab)
     
     # 10 is a threshold for black background
-    non_black_mask = np.any(segmented_image > 10, axis=2)
+    object_mask = np.any(segmented_image > 10, axis=2)
     
     # check if there something to brighten (non-black background)
-    if np.any(non_black_mask):
-        l_values = l_channel[non_black_mask]
+    if np.any(object_mask):
+        l_values = l_channel[object_mask]
         avg_lightness = np.mean(l_values)
         
+        # if too dark, brighten 'L' channel
         if avg_lightness < min_brightness:
             brightness_factor = min_brightness / max(1, avg_lightness)
-            l_channel[non_black_mask] = np.clip(l_channel[non_black_mask] * brightness_factor, 0, 255)
 
-            enhanced = cv2.merge([l_channel, a, b])
+            # match the avg lightness to the min_brightness
+            l_channel[object_mask] = np.clip(l_channel[object_mask] * brightness_factor, 0, 255)
+
+            enhanced = cv2.merge([l_channel, a, b]) # L`+A+B
             enhanced = cv2.cvtColor(enhanced, cv2.COLOR_LAB2RGB)
-            # note background of enhanced image is brightened as well           
+            # even though we only modified the L channel, 
+            # converting color spaces might have changed the RGB values
             
+            # therefore, we start from a clean RGB image
+            # and only apply the enhanced 'object' pixels
             result = np.zeros_like(segmented_image)
-            result[non_black_mask] = enhanced[non_black_mask]
+            result[object_mask] = enhanced[object_mask]
             return result
     
     return segmented_image
-
 
 def process_images(folder_path, output_folder):
     """
@@ -114,11 +117,11 @@ def process_images(folder_path, output_folder):
         output_folder: Path to save results
     """
     # Create output directories
-    ensure_dir_exists(output_folder)
+    create_directory(output_folder)
     masks_dir = os.path.join(output_folder, 'masks')
     segmented_dir = os.path.join(output_folder, 'segmented')
-    ensure_dir_exists(masks_dir)
-    ensure_dir_exists(segmented_dir)
+    create_directory(masks_dir)
+    create_directory(segmented_dir)
     
     # Load images
     images, filenames = load_images_from_folder(folder_path)    

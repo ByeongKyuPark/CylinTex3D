@@ -6,16 +6,18 @@ import os
 import cv2
 import numpy as np
 
-
-def ensure_dir_exists(directory):
-    """Create directory if it doesn't exist."""
+def create_directory(directory):
+    """this creates dir if doesn't exist."""
     if not os.path.exists(directory):
         os.makedirs(directory)
 
-
 def load_images_from_folder(folder_path):
     """
-    Load all images from a folder in sorted order.
+    Load all images from a folder in "SORTED" order.
+
+    Order matters for the pipeline !!
+    This function assumes that the images are named in a way that sorting them
+    lexicographically will yield the correct order (CCW or CW).
     
     Args:
         folder_path: Path to the folder containing images
@@ -26,10 +28,10 @@ def load_images_from_folder(folder_path):
     images = []
     filenames = []
     
-    # order matters...
+    # order matters...!
     for filename in sorted(os.listdir(folder_path)):
-        if filename.endswith(('.png', '.jpg', '.jpeg')):
-            img_path = os.path.join(folder_path, filename)
+        if filename.endswith(('.png', '.jpg', '.jpeg')): # wonder if we need to add .bmp ?
+            img_path = os.path.join(folder_path, filename) # join automatically adds the separator '/' 
             img = cv2.imread(img_path)
             if img is not None:
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -38,10 +40,9 @@ def load_images_from_folder(folder_path):
     
     return images, filenames
 
-
 def resize_to_match_height(source_img, target_height):
     """
-    Resize an image to match the target height while preserving aspect ratio.
+    match the height of the source image to the target height keeping the aspect ratio.
     
     Args:
         source_img: Source image to resize
@@ -53,19 +54,21 @@ def resize_to_match_height(source_img, target_height):
     if source_img.shape[0] == target_height:
         return source_img
     
-    # Calculate new width to maintain aspect ratio
+    # calc "NEW" width based on the original aspect ratio
     aspect_ratio = source_img.shape[1] / source_img.shape[0]
     new_width = int(aspect_ratio * target_height)
-    
-    # Resize image
-    resized = cv2.resize(source_img, (new_width, target_height), interpolation=cv2.INTER_AREA)
-    return resized
 
+    return cv2.resize(source_img, (new_width, target_height), interpolation=cv2.INTER_AREA)
 
-def detect_object_region(image):
+def get_bounding_box(image):
     """
-    Detect the region containing the object (non-black pixels).
-    
+    get the simple bounding box 
+
+    here's how it works:
+    1. convert to grayscale
+    2. threshold to find non-black pixels
+    3. find bounding box (defined by ul,br corners)
+
     Args:
         image: Input image
         
@@ -76,9 +79,10 @@ def detect_object_region(image):
     gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
     
     # threshold to find non-black pixels
+    # first param is the threshold value, which we set to 10
     _, binary = cv2.threshold(gray, 10, 255, cv2.THRESH_BINARY)
     
-    # find bounding box
+    # finding bbox
     rows = np.any(binary, axis=1)
     cols = np.any(binary, axis=0)
     
@@ -87,6 +91,6 @@ def detect_object_region(image):
         x_min, x_max = np.where(cols)[0][[0, -1]]
         return [x_min, y_min, x_max, y_max]
     else:
-        # default to full image if no object detected
+        # default to full image if no object detecte
         h, w = image.shape[:2]
         return [0, 0, w, h]

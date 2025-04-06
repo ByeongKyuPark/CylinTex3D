@@ -1,0 +1,20 @@
+1. 이미지 segmentation (Image Segmentation)
+   python main.py --input_dir data/images --output_dir results --remove_planes
+
+2. 파노라마 텍스처 생성(segmentation 생략) (Panorama Creation, skip segmentation)
+   python main.py --skip_segmentation --input_dir data/images --output_dir results
+
+3. 3d 모델 (3D Model Creation)
+   python main.py --skip_segmentation --skip_panorama --input_dir data/images --output_dir results --remove_planes
+
+4. 아래/위에 생성된 plane 제거
+   # python src/modeling/plane_remover.py --input results/3d_model/visual_hull.obj --output results/3d_model/cleaned_hull.obj --threshold 0.95
+
+5. texture 입히기(u,v) (Apply Texture Mapping)
+   python texture_model.py --model_path results/3d_model/visual_hull.obj --panorama_path results/panorama.png --output_dir results/3d_model --remove_planes --plane_threshold 0.7
+
+[전체 한번에] (All-in-One Pipeline)
+   python main.py --input_dir images --output_dir results --remove_planes --plane_threshold 0.9
+
+[텍스처만 다시 입히기] (Just Re-apply Texture)
+   python texture_model.py --model_path results/3d_model/visual_hull.obj --panorama_path results/panorama.png --output_dir results/3d_model --texture_v_scale 1.0 --texture_v_offset 0.0

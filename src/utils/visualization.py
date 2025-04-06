@@ -6,9 +6,9 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2
-from utils.image_utils import resize_to_match_height
-
-
+from src.utils.image_utils import resize_to_match_height
+from src.utils.image_utils import get_bounding_box
+    
 def visualize_segmentation(original, segmented, mask, show=True, save_path=None):
     """
     Visualize segmentation results with original image, segmented object, and mask.
@@ -68,8 +68,7 @@ def visualize_matching(images, parameters_used, adjacent_strip_width=30, output_
     resized_images = [resize_to_match_height(img, common_height) for img in images]
     
     # get center strip from first image
-    from utils.image_utils import detect_object_region
-    bbox = detect_object_region(resized_images[0])
+    bbox = get_bounding_box(resized_images[0])
     x_min, _, x_max, _ = bbox
     center_x = (x_min + x_max) // 2
     

@@ -4,7 +4,7 @@ Strip matching algorithms for panorama creation.
 
 import itertools
 import numpy as np
-from utils.image_utils import detect_object_region, resize_to_match_height
+from src.utils.image_utils import get_bounding_box, resize_to_match_height
 
 
 def generate_parameter_combinations(match_widths, center_region_percents, y_offset_ranges):
@@ -82,14 +82,14 @@ def find_best_match_with_offset(left_strip, next_image, x_pos, match_width, y_of
     Returns:
         SSD value for this match
     """
-    # Check if position is valid
+    # check if position is valid
     if x_pos < 0 or x_pos + match_width > next_image.shape[1]:
         return float('inf')
     
-    # Extract strip from next image with vertical offset
+    # extract strip from next image with vertical offset
     h, w = next_image.shape[:2]
     
-    # Create a shifted version of the next_image
+    # create a shifted version of the next_image
     if y_offset == 0:
         shifted_image = next_image
     else:
@@ -111,14 +111,14 @@ def find_best_match_with_offset(left_strip, next_image, x_pos, match_width, y_of
     return compute_ssd(left_strip, next_strip)
 
 
-def find_best_match_in_central_region(left_strip, next_image, match_width, 
+def find_best_match_in_central_region(prev_strip, next_image, match_width, 
                                     center_region_percent=0.6, y_offset_range=(-5, 5)):
     """
     Find the best matching position for left_strip within the central region of next_image.
     Supports vertical offsets for better matching.
     
     Args:
-        left_strip: Left edge strip from current panorama
+        prev_strip: Left (the most recent) edge strip from current panorama
         next_image: Next image to search in
         match_width: Width of strip to match
         center_region_percent: Width of central region to search as fraction of object width
@@ -131,7 +131,7 @@ def find_best_match_in_central_region(left_strip, next_image, match_width,
         bbox: Object bounding box in next image
     """
     # get bounding box of object in next image
-    bbox = detect_object_region(next_image)
+    bbox = get_bounding_box(next_image)
     x_min, _, x_max, _ = bbox
     
     # compute center_x, half_width
@@ -147,10 +147,10 @@ def find_best_match_in_central_region(left_strip, next_image, match_width,
     min_ssd = float('inf')
     best_y_offset = 0
     
-    if left_strip.shape[1] != match_width:
+    if prev_strip.shape[1] != match_width:
         # If it's larger, crop it / if it's smaller, this might not work well...
-        if left_strip.shape[1] > match_width:
-            left_strip = left_strip[:, :match_width]
+        if prev_strip.shape[1] > match_width:
+            prev_strip = prev_strip[:, :match_width]
     
     # try different vertical offsets
     y_offsets = range(y_offset_range[0], y_offset_range[1] + 1)
@@ -158,7 +158,7 @@ def find_best_match_in_central_region(left_strip, next_image, match_width,
     # search for best match in central region with different y-offsets
     for x in range(search_start, search_end + 1, 2): # note step=2 for faster processing
         for y_offset in y_offsets:
-            ssd = find_best_match_with_offset(left_strip, next_image, x, match_width, y_offset)
+            ssd = find_best_match_with_offset(prev_strip, next_image, x, match_width, y_offset)
             
             if ssd < min_ssd:
                 min_ssd = ssd
@@ -171,7 +171,7 @@ def find_best_match_in_central_region(left_strip, next_image, match_width,
     
     for x in range(fine_start, fine_end + 1):
         for y_offset in y_offsets:
-            ssd = find_best_match_with_offset(left_strip, next_image, x, match_width, y_offset)
+            ssd = find_best_match_with_offset(prev_strip, next_image, x, match_width, y_offset)
             
             if ssd < min_ssd:
                 min_ssd = ssd
@@ -201,11 +201,11 @@ def find_best_match_with_parameters(current_pano, next_img, param_combinations):
     
     for match_width, center_region_percent, y_offset_range in param_combinations:
         # Extract LEFT edge strip from current panorama for this match_width
-        left_strip = current_pano[:, :match_width]
+        prev_strip = current_pano[:, :match_width]
         
         # Find best match with these parameters
         best_pos, ssd, best_y_offset, bbox = find_best_match_in_central_region(
-            left_strip,
+            prev_strip,
             next_img,
             match_width,
             center_region_percent,
@@ -238,19 +238,19 @@ def evaluate_pair_quality(images, match_width=30, center_region_percent=0.15, y_
     if len(images) < 2:
         return []
     
-    # Ensure all images have the same height
+    # ensure all images have the same height
     common_height = min(img.shape[0] for img in images)
     resized_images = [resize_to_match_height(img, common_height) for img in images]
     
     match_qualities = []
     
-    # Evaluate each consecutive image pair
+    # evaluate each consecutive image pair
     for i in range(len(resized_images) - 1):
         img1 = resized_images[i]
         img2 = resized_images[i + 1]
         
         # Extract right edge strip from first image
-        bbox = detect_object_region(img1)
+        bbox = get_bounding_box(img1)
         x_min, _, x_max, _ = bbox
         
         strip_pos = max(0, x_max - match_width)
