@@ -22,8 +22,8 @@
       <td align="center"><b>Textured 3D Model (View 2)</b></td>
     </tr>
     <tr>
-      <td><img src="results/3d_model/sample.jpg" width="400" alt="3D Model View 1"/></td>
-      <td><img src="results/3d_model/sample2.jpg" width="400" alt="3D Model View 2"/></td>
+      <td><img src="docs/sample.jpg" width="400" alt="3D Model View 1"/></td>
+      <td><img src="docs/sample2.jpg" width="400" alt="3D Model View 2"/></td>
     </tr>
   </table>
 </div>
