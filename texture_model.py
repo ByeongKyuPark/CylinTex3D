@@ -9,6 +9,7 @@ import trimesh
 import numpy as np
 from src.texturing.texture_mapping import generate_cylindrical_uvs, apply_texture_to_mesh
 from src.utils.image_utils import create_directory
+from src.modeling.plane_remover import remove_planar_faces
 
 def main():
     """
@@ -31,6 +32,29 @@ def main():
     parser.add_argument('--texture_v_offset', type=float, default=0.05,
                         help='Offset for vertical texture mapping [0-1]')
     
+    parser.add_argument('--remove_planes', action='store_true',
+                        help='Remove planar faces from 3D model')
+        
+    parser.add_argument('--plane_threshold', type=float, default=0.8,
+                        help='Threshold for plane detection [0-1]')
+    
+    # Add mesh improvement options
+    parser.add_argument('--post_process', action='store_true',
+                        help='Apply mesh post-processing to improve quality')
+    
+    parser.add_argument('--smooth_iterations', type=int, default=5,
+                        help='Number of smoothing iterations')
+    
+    parser.add_argument('--fill_holes_size', type=int, default=100,
+                        help='Maximum size of holes to fill')
+    
+    parser.add_argument('--subdivide', action='store_true',
+                        help='Subdivide mesh for higher resolution')
+    
+    # Add option to regenerate UV coordinates or reuse existing
+    parser.add_argument('--reuse_uvs', action='store_true',
+                        help='Reuse existing UV coordinates if available')
+    
     args = parser.parse_args()
     
     # validate input files
@@ -49,8 +73,27 @@ def main():
     print(f"Loading mesh from {args.model_path}")
     mesh = trimesh.load(args.model_path)
     if mesh is None:
-        print(f"ERROR: Failed to load panorama image")
+        print(f"ERROR: Failed to load mesh file")
         return
+    
+    # Apply post-processing if requested
+    if args.post_process:
+        try:
+            from src.modeling.mesh_processing import improve_mesh
+            print("Applying mesh post-processing...")
+            mesh = improve_mesh(
+                mesh,
+                smooth_iterations=args.smooth_iterations,
+                fill_holes_size=args.fill_holes_size,
+                subdivide=args.subdivide
+            )
+        except ImportError:
+            print("Warning: Mesh processing module not available. Using raw mesh.")
+    
+    # Remove planes if requested
+    if args.remove_planes:
+        print(f"Removing planar faces with threshold {args.plane_threshold}...")
+        mesh = remove_planar_faces(mesh, args.plane_threshold)
     
     # apply new texture mapping
     print(f"Applying new texture mapping with scale={args.texture_v_scale}, offset={args.texture_v_offset}")

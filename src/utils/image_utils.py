@@ -28,6 +28,16 @@ def load_images_from_folder(folder_path):
     images = []
     filenames = []
     
+    # Check if folder exists
+    if not os.path.exists(folder_path):
+        # Try alternative path (parent directory)
+        alternative_path = os.path.dirname(folder_path)
+        if os.path.exists(alternative_path):
+            folder_path = alternative_path
+        else:
+            print(f"Warning: Folder not found: {folder_path}")
+            return images, filenames
+    
     # order matters...!
     for filename in sorted(os.listdir(folder_path)):
         if filename.endswith(('.png', '.jpg', '.jpeg')): # wonder if we need to add .bmp ?

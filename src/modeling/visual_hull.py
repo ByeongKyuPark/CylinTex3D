@@ -95,21 +95,32 @@ def create_volume_from_silhouettes(silhouettes, angles, volume_size=(100, 100, 1
     
     return volume
 
-def create_mesh_from_volume(volume, level=0.5, step_size=1, allow_degenerate=False):
+def create_mesh_from_volume(volume, level=0.5, step_size=1, allow_degenerate=False, use_poisson=True):
     """
-    
-    Create a 3D mesh from a binary volume using Marching Cubes algorithm.
+    Create a 3D mesh from a binary volume using Marching Cubes algorithm
+    with optional Poisson reconstruction for higher quality.
     
     Args:
         volume: 3D binary volume
         level: Iso-surface level (0.5 for binary volumes)
         step_size: Step size for marching cubes (1 = full resolution)
         allow_degenerate: Allow degenerate faces
+        use_poisson: Use Poisson reconstruction for higher quality mesh
         
     Returns:
         Trimesh object
     """
-    # Use marching cubes with parameters
+    if use_poisson:
+        try:
+            # Try to use our advanced Poisson reconstruction pipeline
+            from src.modeling.mesh_processing import volume_to_mesh_poisson
+            return volume_to_mesh_poisson(volume, level)
+        except ImportError:
+            print("Warning: Mesh processing module not available. Using standard marching cubes.")
+            # Fall back to standard method
+            pass
+    
+    # Use marching cubes with parameters if Poisson is not available or not requested
     verts, faces, normals, _ = measure.marching_cubes(
         volume, 
         level=level,
@@ -140,7 +151,9 @@ def generate_angles(num_images):
     return [i * (360.0 / num_images) for i in range(num_images)]
 
 # wrapper function to create visual hull mesh
-def create_visual_hull(segmented_images, output_dir, volume_size=(200, 200, 200)):
+def create_visual_hull(segmented_images, output_dir, volume_size=(200, 200, 200),
+                      post_process=True, smooth_iterations=None, fill_holes_size=100, 
+                      subdivide=False, use_poisson=True):
     """
     Create a visual hull mesh from segmented images.
     
@@ -148,9 +161,14 @@ def create_visual_hull(segmented_images, output_dir, volume_size=(200, 200, 200)
         segmented_images: List of segmented images
         output_dir: Directory to save the mesh
         volume_size: Size of the 3D volume
+        post_process: Whether to apply mesh improvement
+        smooth_iterations: Not used anymore, kept for API compatibility
+        fill_holes_size: Maximum size of holes to fill
+        subdivide: Whether to subdivide the mesh for higher resolution
+        use_poisson: Whether to use Poisson reconstruction for high quality mesh
         
     Returns:
-        Path to saved mesh file
+        Path to saved mesh file and the mesh object
     """
     # extract silhouettes from segmented images
     silhouettes = extract_silhouettes(segmented_images)
@@ -162,7 +180,20 @@ def create_visual_hull(segmented_images, output_dir, volume_size=(200, 200, 200)
     volume = create_volume_from_silhouettes(silhouettes, angles, volume_size)
     
     # create "mesh (renderable triangles)" from "volume"
-    mesh = create_mesh_from_volume(volume)
+    mesh = create_mesh_from_volume(volume, use_poisson=use_poisson)
+    
+    # Apply post-processing if requested
+    if post_process:
+        try:
+            from src.modeling.mesh_processing import improve_mesh
+            print("Applying mesh post-processing...")
+            mesh = improve_mesh(
+                mesh,
+                fill_holes_size=fill_holes_size,
+                subdivide=subdivide
+            )
+        except ImportError:
+            print("Warning: Mesh processing module not available. Using raw mesh.")
     
     # save mesh
     mesh_path = os.path.join(output_dir, 'visual_hull.obj')
